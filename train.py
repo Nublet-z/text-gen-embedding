@@ -217,8 +217,8 @@ def train(net, train_data, val_data, epochs=10, n_seqs=10, n_steps=50, lr=1e-5, 
 
                     val_losses.append(val_loss.item())
 
-                gen_text = [tokenizer.decode(token) for token in output.gen_tokens]
-                target_text = [tokenizer.decode(target) for target in targets]
+                gen_text = [tokenizer.decode(token, skip_special_tokens=True) for token in output.gen_tokens]
+                target_text = [tokenizer.decode(target, skip_special_tokens=True) for target in targets]
 
                 # Calculate BERT score
                 bert_score = bertscore.compute(predictions=gen_text, references=target_text, lang="en")
