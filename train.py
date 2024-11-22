@@ -13,6 +13,7 @@ import numpy as np
 import torch.nn as nn
 from tqdm.auto import tqdm
 import sys
+from evaluate import load
 
 sys.path.append('.')
 
@@ -70,6 +71,9 @@ def train(net, train_data, val_data, epochs=10, n_seqs=10, n_steps=50, lr=1e-5, 
 
     '''
 
+    bertscore = load("bertscore")
+    bleu = load("bleu")
+    rouge = load('rouge')
     net.train()
     optimizer = torch.optim.Adam(net.parameters(), lr=lr)
     criterion = nn.CrossEntropyLoss()
@@ -86,6 +90,8 @@ def train(net, train_data, val_data, epochs=10, n_seqs=10, n_steps=50, lr=1e-5, 
 
     old_time = time.time()
     losses = []
+
+    best_loss = float('inf')
 
     for e in tqdm(range(epochs)):
         h = net.init_hidden(n_seqs)
@@ -151,7 +157,7 @@ def train(net, train_data, val_data, epochs=10, n_seqs=10, n_steps=50, lr=1e-5, 
 
             loss = criterion(output, targets.flatten())
             losses.append(loss.item())
-            print("loss:", loss)
+            print(f"loss: {loss}", end='\r')
 
             loss.backward()
 
@@ -211,23 +217,40 @@ def train(net, train_data, val_data, epochs=10, n_seqs=10, n_steps=50, lr=1e-5, 
 
                     val_losses.append(val_loss.item())
 
-                gen_text = tokenizer.decode(output.gen_tokens[0])
-                target_text = tokenizer.decode(targets[0])
+                gen_text = [tokenizer.decode(token) for token in output.gen_tokens]
+                target_text = [tokenizer.decode(target) for target in targets]
+
+                # Calculate BERT score
+                bert_score = bertscore.compute(predictions=gen_text, references=target_text, lang="en")
+                bert_f1 = np.mean(bert_score['f1'])
+                bert_p = np.mean(bert_score['precision'])
+                bert_r = np.mean(bert_score['recall'])
+
+                # Calculate BLEU
+                bleu_sc = bleu.compute(predictions=gen_text, references=target_text)
+                bleu_sc = bleu_sc['bleu']
+
+                # Calculate Rouge
+                rouge_sc = rouge.compute(predictions=gen_text, references=target_text)
+                rouges1 = np.mean(rouge_sc['rouge1'])
+                rouges2 = np.mean(rouge_sc['rouge2'])
+                rougesL = np.mean(rouge_sc['rougeL'])
 
                 print("----- Sample Generation")
                 print("predicted:", gen_text)
                 print("target:", target_text)
 
                 # save checkpoint
-                print("save checkpoint..")
-                model_name = f'{directory}g_pretrained.net'
+                if val_loss < best_loss:
+                    print("save checkpoint..")
+                    model_name = f'{directory}g_pretrained.net'
 
-                checkpoint = {'n_hidden': net.hidden_size,
-                              'n_layers': net.num_layers,
-                              'state_dict': net.state_dict(),}
+                    checkpoint = {'n_hidden': net.hidden_size,
+                                'n_layers': net.num_layers,
+                                'state_dict': net.state_dict(),}
 
-                with open(model_name, 'wb') as f:
-                    torch.save(checkpoint, f)
+                    with open(model_name, 'wb') as f:
+                        torch.save(checkpoint, f)
 
                 print("save the loss log")
                 # append loss data to csv file
@@ -237,9 +260,9 @@ def train(net, train_data, val_data, epochs=10, n_seqs=10, n_steps=50, lr=1e-5, 
                     writer = csv.writer(file)
                     # check if the file is empty to write header
                     if file.tell() == 0:
-                        writer.writerow(["train_loss", "val_loss"])
+                        writer.writerow(["train_loss", "val_loss", "bert_f1", "bert_p", "bert_r", "bleu", "rouge1", "rouge2", "rougeL"])
 
-                    writer.writerow([np.mean(losses), np.mean(val_losses)])
+                    writer.writerow([np.mean(losses), np.mean(val_losses), bert_f1, bert_p, bert_r, bleu_sc, rouges1, rouges2, rougesL])
 
                 losses = []
 
@@ -289,10 +312,6 @@ n_seqs, n_steps = opt.batch_size, 60
 
 # you may change cuda to True if you plan on using a GPU!
 # also, if you do, please INCREASE the epochs to 25
-
-# Open the training log file.
-log_file = f'{directory}training_log2.txt'
-f = open(log_file, 'w')
 
 train(net, train_data, val_data, epochs=10, n_seqs=n_seqs, n_steps=n_steps, lr=1e-3, cuda=cuda, print_every=5)
 
