@@ -217,8 +217,8 @@ def train(net, train_data, val_data, epochs=10, n_seqs=10, n_steps=50, lr=1e-5, 
 
                     val_losses.append(val_loss.item())
 
-                gen_text = [tokenizer.decode(token, skip_special_tokens=True) for token in output.gen_tokens]
-                target_text = [tokenizer.decode(target, skip_special_tokens=True) for target in targets]
+                gen_text = [tokenizer.decode(token) for token in output.gen_tokens]
+                target_text = [tokenizer.decode(target) for target in targets]
 
                 # Calculate BERT score
                 bert_score = bertscore.compute(predictions=gen_text, references=target_text, lang="en")
@@ -237,8 +237,8 @@ def train(net, train_data, val_data, epochs=10, n_seqs=10, n_steps=50, lr=1e-5, 
                 rougesL = np.mean(rouge_sc['rougeL'])
 
                 print("----- Sample Generation")
-                print("predicted:", gen_text)
-                print("target:", target_text)
+                print("predicted:", gen_text[0])
+                print("target:", target_text[0])
 
                 # save checkpoint
                 if val_loss < best_loss:
@@ -292,12 +292,14 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 net = LSTMG_latest(opt, device=device)
 # Load model
 
-# with open('./weight2/g_pretrained.net', 'rb') as f:
-#     checkpoint = torch.load(f)
+if opt.continue_train:
+    print("Load checkpoint..")
+    with open(f'{directory}g_pretrained.net', 'rb') as f:
+        checkpoint = torch.load(f)
 
-# print("Load checkpoints..")
-# net.load_state_dict(checkpoint['state_dict'])
-# print(net)
+    print("Load checkpoints..")
+    net.load_state_dict(checkpoint['state_dict'])
+    # print(net)
 
 # check if GPU is available
 train_on_gpu = torch.cuda.is_available()
@@ -315,5 +317,4 @@ n_seqs, n_steps = opt.batch_size, 60
 
 train(net, train_data, val_data, epochs=10, n_seqs=n_seqs, n_steps=n_steps, lr=1e-3, cuda=cuda, print_every=5)
 
-# Close the training log file.
-f.close()
+print("Finish Training!")
