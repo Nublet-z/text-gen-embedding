@@ -324,7 +324,7 @@ class LSTMG_latest(nn.Module):
         # if len(eot_idx) > 0:
         #     for i, j in eot_idx:
         #         gen_tokens[i,j+1:] = 0
-        print("gen_tokens:", gen_tokens[0])
+        # print("gen_tokens:", gen_tokens[0])
 
         # return (logits/self.gamma), (hidden_d, mem_d)
         return Seq2SeqGenerator(
